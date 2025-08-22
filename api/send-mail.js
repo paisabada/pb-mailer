@@ -44,3 +44,49 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: e.message });
   }
 }
+// api/send-mail.js
+import nodemailer from "nodemailer";
+
+export default async function handler(req, res) {
+  // Only allow POST
+  if (req.method !== "POST") {
+    res.setHeader("Allow", ["POST"]);
+    return res.status(405).json({ ok: false, error: "Method Not Allowed" });
+  }
+
+  try {
+    const { to, subject, html, text, fromName = "PaisaBada" } = req.body || {};
+    if (!to || !subject || !(html || text)) {
+      return res.status(400).json({ ok: false, error: "Missing to/subject/body" });
+    }
+
+    // SMTP Transport (Zoho)
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,   // smtp.zoho.in
+      port: Number(process.env.SMTP_PORT || 465),
+      secure: String(process.env.SMTP_SECURE || "true") === "true",
+      auth: {
+        user: process.env.SMTP_USER, // no-reply@paisabada.in
+        pass: process.env.SMTP_PASS, // app password
+      },
+    });
+
+    // Build message
+    const fromAddress = `"${fromName}" <${process.env.SMTP_USER}>`;
+
+    const info = await transporter.sendMail({
+      from: fromAddress,
+      to,                    // "user@example.com, another@ex.com" allowed
+      subject,
+      text: text || undefined,
+      html: html || undefined,
+      replyTo: process.env.REPLY_TO || "contact@paisabada.in",
+    });
+
+    return res.status(200).json({ ok: true, messageId: info.messageId });
+  } catch (err) {
+    console.error("MAIL ERROR:", err);
+    return res.status(500).json({ ok: false, error: err?.message || "Server error" });
+  }
+}
+
