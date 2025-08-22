@@ -1,0 +1,10 @@
+{
+  "name": "pb-mailer",
+  "version": "1.0.0",
+  "description": "Paisabada mailer service for Spin & Win auto-replies",
+  "main": "api/send-mail.js",
+  "type": "module",
+  "dependencies": {
+    "nodemailer": "^6.9.8"
+  }
+}
