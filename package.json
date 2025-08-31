@@ -5,6 +5,6 @@
   "main": "api/send-mail.js",
   "type": "module",
   "dependencies": {
-    "nodemailer": "^6.9.14"
+    "nodemailer": "^6.9.8"
   }
 }
