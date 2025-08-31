@@ -2,12 +2,6 @@
   "name": "pb-mailer",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
-  "scripts": {
-    "dev": "vercel dev",
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "nodemailer": "^6.9.11"
-  }
+  "private": true,
+  "dependencies": { "nodemailer": "^6.9.11" }
 }
