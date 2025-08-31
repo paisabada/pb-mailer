@@ -1,92 +1,79 @@
-import nodemailer from "nodemailer";
-
-function allowCORS(res) {
-  res.setHeader("Access-Control-Allow-Origin", "https://paisabada.in");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-}
-
-export default async function handler(req, res) {
-  allowCORS(res);
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
-
-  try {
-    const { to, name, prize } = req.body || {};
-    if (!to || !name || !prize) return res.status(400).json({ ok: false, error: "Missing to/name/prize" });
-
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: String(process.env.SMTP_PORT || "465") === "465",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
-
-    const html = `
-      <h2>🎉 Congrats ${name}!</h2>
-      <p>You won <b>₹${prize} SIP credit</b> on Spin & Win.</p>
-      <p>Team PaisaBada will connect with you soon.</p>
-      <small>No cash rewards. SIP investment credit only. T&C apply.</small>
-    `;
-
-    await transporter.sendMail({
-      from: `"PaisaBada" <${process.env.SMTP_USER}>`,
-      to,
-      subject: `🎉 You won ₹${prize} SIP credit!`,
-      html
-    });
-
-    return res.status(200).json({ ok: true });
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message });
-  }
-}
 // api/send-mail.js
 import nodemailer from "nodemailer";
 
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || "*"; // e.g. https://paisabada.github.io
+
 export default async function handler(req, res) {
-  // Only allow POST
+  // CORS (preflight)
+  res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(200).end();
+
   if (req.method !== "POST") {
-    res.setHeader("Allow", ["POST"]);
     return res.status(405).json({ ok: false, error: "Method Not Allowed" });
   }
 
   try {
-    const { to, subject, html, text, fromName = "PaisaBada" } = req.body || {};
-    if (!to || !subject || !(html || text)) {
-      return res.status(400).json({ ok: false, error: "Missing to/subject/body" });
+    const {
+      to,               // required: recipient email
+      subject,          // required
+      html,             // optional: if not given, we send a default
+      cc, bcc, replyTo, // optional
+      winCardUrl,       // optional: remote image to attach inline
+      text              // optional plain-text fallback
+    } = req.body || {};
+
+    if (!to || !subject) {
+      return res.status(400).json({ ok: false, error: "Missing 'to' or 'subject'" });
     }
 
-    // SMTP Transport (Zoho)
+    // --- Transporter (Zoho) ---
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,   // smtp.zoho.in
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: String(process.env.SMTP_SECURE || "true") === "true",
+      host: process.env.ZOHO_HOST,        // e.g. smtp.zoho.in  (India DC) / smtp.zoho.com
+      port: Number(process.env.ZOHO_PORT || 465),
+      secure: true,                        // 465 = SSL
       auth: {
-        user: process.env.SMTP_USER, // no-reply@paisabada.in
-        pass: process.env.SMTP_PASS, // app password
-      },
+        user: process.env.ZOHO_USER,       // no-reply@paisabada.in
+        pass: process.env.ZOHO_PASS        // Zoho App Password (not your login pass)
+      }
     });
 
-    // Build message
-    const fromAddress = `"${fromName}" <${process.env.SMTP_USER}>`;
+    // Inline win card (optional)
+    const attachments = [];
+    if (winCardUrl) {
+      attachments.push({
+        filename: "win-card.jpg",
+        path: winCardUrl,                  // remote URL is fine
+        cid: "wincard"                     // use as <img src="cid:wincard">
+      });
+    }
 
+    // Default HTML if not provided
+    const fallbackHtml = `
+      <div style="font-family:system-ui,Arial,sans-serif;line-height:1.5">
+        <h2 style="margin:0 0 12px">🎉 You won ₹500 SIP credit!</h2>
+        <p>Thanks for playing <b>Paisabada Spin & Win</b>.</p>
+        ${winCardUrl ? `<p><img src="cid:wincard" alt="Win Card" style="max-width:600px;width:100%;border-radius:8px"></p>` : ""}
+        <p style="margin-top:16px">Start your Paisa journey → <a href="https://paisabada.in/spin-and-win">Claim now</a></p>
+        <hr style="border:none;border-top:1px solid #eee;margin:16px 0">
+        <p style="font-size:12px;color:#666">No cash rewards. SIP investment credit only. T&amp;C apply.</p>
+      </div>
+    `;
+
+    // --- Send ---
     const info = await transporter.sendMail({
-      from: fromAddress,
-      to,                    // "user@example.com, another@ex.com" allowed
+      from: `"${process.env.FROM_NAME || "Paisabada"}" <${process.env.FROM_EMAIL}>`,
+      to, cc, bcc, replyTo,
       subject,
-      text: text || undefined,
-      html: html || undefined,
-      replyTo: process.env.REPLY_TO || "contact@paisabada.in",
+      text: text || "You won ₹500 SIP credit bonus on Paisabada.",
+      html: html || fallbackHtml,
+      attachments
     });
 
     return res.status(200).json({ ok: true, messageId: info.messageId });
   } catch (err) {
-    console.error("MAIL ERROR:", err);
-    return res.status(500).json({ ok: false, error: err?.message || "Server error" });
+    console.error("Mailer error:", err);
+    return res.status(500).json({ ok: false, error: String(err) });
   }
 }
-
