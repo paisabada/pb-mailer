@@ -1,33 +1,27 @@
 import nodemailer from "nodemailer";
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const { to, subject, html } = req.body;
-
   try {
     const transporter = nodemailer.createTransport({
-      host: process.env.ZOHO_HOST,   // smtp.zoho.in
-      port: process.env.ZOHO_PORT,   // 465
-      secure: true,
+      host: process.env.ZOHO_HOST,
+      port: process.env.ZOHO_PORT,
+      secure: process.env.ZOHO_PORT == 465, // true for SSL
       auth: {
-        user: process.env.ZOHO_USER, // no-reply@paisabada.in
-        pass: process.env.ZOHO_PASS  // your app password
-      }
+        user: process.env.ZOHO_USER,
+        pass: process.env.ZOHO_PASS,
+      },
     });
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"Paisabada" <${process.env.ZOHO_USER}>`,
-      to,
-      subject,
-      html,
+      to: req.body.to,
+      subject: req.body.subject,
+      html: req.body.html,
     });
 
-    return res.status(200).json({ ok: true });
+    res.status(200).json({ ok: true, info });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ ok: false, error: String(err) });
+    res.status(500).json({ ok: false, error: err.message });
   }
 }
