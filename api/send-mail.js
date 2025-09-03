@@ -25,5 +25,8 @@ export default async function handler(req, res) {
   } catch (e) {
     console.error("Mailer error:", e);
     res.status(500).json({ ok: false, error: e.message });
+    console.log("ZOHO_HOST:", process.env.ZOHO_HOST);
+console.log("ZOHO_PORT:", process.env.ZOHO_PORT);
+
   }
 }
